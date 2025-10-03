@@ -1,0 +1,2 @@
+# hanbetu.bot
+hanbetusimasu
