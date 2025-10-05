@@ -144,7 +144,7 @@ async def on_voice_state_update(member, before, after):
         notification_channel = guild.get_channel(NOTIFICATION_CHANNEL_ID)
         if notification_channel:
             print(f"  > VC-1への初回入室を検知、通知を送信します。")
-            try: await notification_channel.send(f"こんグミ～！すこやかグミが配信開始♥")
+            try: await notification_channel.send(f"@everyone こんグミ～！すこやかグミが配信開始♥")
             except discord.Forbidden: print("  > エラー: 通知チャンネルへのメッセージ送信権限がありません。")
         print("  > VC-1の接続を許可します。")
         try: await vc1.set_permissions(viewer_role, connect=True)
@@ -185,4 +185,5 @@ async def on_voice_state_update(member, before, after):
 # Botを起動
 # 2. 環境変数からトークンを読み込むように変更
 bot.run(os.environ.get('DISCORD_BOT_TOKEN'))
+
 # --- この上までをコピー ---
