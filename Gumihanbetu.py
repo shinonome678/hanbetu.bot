@@ -23,7 +23,7 @@ VC2_ID = 1369045799803027586    # VC-2: 通知が行われないチャンネル
 
 VIEWER_ROLE_ID = 1409157639367032923      # 視聴者ロール
 VERIFIED_ROLE_ID = 1409164397242355724    # 認証ボタンで付与するロール
-NOTIFICATION_CHANNEL_ID = 1369044768440582296 # 通知メッセージを送信するテキストチャンネルのID
+NOTIFICATION_CHANNEL_ID = 1427703021789380789 # 通知メッセージを送信するテキストチャンネルのID
 # ----------------------------------------------
 
 
@@ -187,3 +187,4 @@ async def on_voice_state_update(member, before, after):
 bot.run(os.environ.get('DISCORD_BOT_TOKEN'))
 
 # --- この上までをコピー ---
+
