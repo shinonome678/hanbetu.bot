@@ -188,3 +188,4 @@ bot.run(os.environ.get('DISCORD_BOT_TOKEN'))
 
 # --- この上までをコピー ---
 
+
