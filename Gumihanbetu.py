@@ -94,7 +94,6 @@ async def setup_welcome(ctx):
     await ctx.send(embed=embed, view=view)
     print("ウェルカムメッセージとボタンを送信しました。")
 
-
 # --- ボイスチャンネルの状態変化を監視する処理 ---
 @bot.event
 async def on_voice_state_update(member, before, after):
@@ -102,90 +101,67 @@ async def on_voice_state_update(member, before, after):
     if not guild: return
 
     host_role = guild.get_role(HOST_ROLE_ID)
-    if not host_role: print("エラー: 親ロールが見つかりません。"); return
+    viewer_role = guild.get_role(VIEWER_ROLE_ID)
+    if not host_role or not viewer_role: 
+        print("エラー: ロールが見つかりません。")
+        return
     
+    # 1. ホスト以外の動き、または同じチャンネル内での状態変化（マイクON/OFFなど）は無視
     if host_role not in member.roles or before.channel == after.channel:
         return
 
-    viewer_role = guild.get_role(VIEWER_ROLE_ID)
-    if not viewer_role: print("エラー: 視聴者ロールが見つかりません。"); return
-
     vc1 = guild.get_channel(VC1_ID)
     vc2 = guild.get_channel(VC2_ID)
-    if not (vc1 and vc2): print("エラー: VC-1またはVC-2が見つかりません。"); return
-    
-    # --- イベント前後の状態を計算 ---
-    hosts_in_vc1_before = len([m for m in vc1.members if host_role in m.roles and m.id != member.id]) + (1 if before.channel == vc1 else 0)
-    hosts_in_vc2_before = len([m for m in vc2.members if host_role in m.roles and m.id != member.id]) + (1 if before.channel == vc2 else 0)
-    total_hosts_before = hosts_in_vc1_before + hosts_in_vc2_before
-    
-    hosts_in_vc1_after = len([m for m in vc1.members if host_role in m.roles])
-    hosts_in_vc2_after = len([m for m in vc2.members if host_role in m.roles])
-    total_hosts_after = hosts_in_vc1_after + hosts_in_vc2_after
+    if not (vc1 and vc2): 
+        print("エラー: チャンネルが見つかりません。")
+        return
 
-    # --- セッション全体の開始・終了を判定 ---
-    if total_hosts_before == 0 and total_hosts_after > 0:
-        print(f"> 通話セッション開始: ホスト({member.display_name})が入室しました。")
-        print("  > 全員に視聴者ロールを付与します。")
-        for m in guild.members:
-            if host_role not in m.roles and not m.bot and viewer_role not in m.roles:
-                try: await m.add_roles(viewer_role)
-                except discord.Forbidden: pass
-    elif total_hosts_before > 0 and total_hosts_after == 0:
-        print(f"> 通話セッション終了: 最後のホスト({member.display_name})が退室しました。")
-        print("  > 全員から視聴者ロールを剥奪します。")
-        for m in guild.members:
-            if viewer_role in m.roles:
-                try: await m.remove_roles(viewer_role)
-                except discord.Forbidden: pass
+    # 現在の各VCにいるホストの数を取得
+    hosts_in_vc1 = len([m for m in vc1.members if host_role in m.roles])
+    hosts_in_vc2 = len([m for m in vc2.members if host_role in m.roles])
 
-    # --- VC-1の管理 ---
-    if hosts_in_vc1_before == 0 and hosts_in_vc1_after > 0:
+    # --- VC-1 の管理 ---
+    # ホストが一人目として入室した場合
+    if before.channel != vc1 and after.channel == vc1 and hosts_in_vc1 == 1:
+        print(f"> VC-1 配信開始 ({member.display_name})：接続を許可します。")
+        # 視聴者ロールに対して「接続」を許可する（一括設定なので429エラーにならない）
+        await vc1.set_permissions(viewer_role, connect=True)
+        
         notification_channel = guild.get_channel(NOTIFICATION_CHANNEL_ID)
         if notification_channel:
-            print(f"  > VC-1への初回入室を検知、通知を送信します。")
             try: await notification_channel.send(f"@everyone こんグミ～！すこやかグミが配信開始♥")
-            except discord.Forbidden: print("  > エラー: 通知チャンネルへのメッセージ送信権限がありません。")
-        print("  > VC-1の接続を許可します。")
-        try: await vc1.set_permissions(viewer_role, connect=True)
-        except discord.Forbidden: pass
-    elif hosts_in_vc1_before > 0 and hosts_in_vc1_after == 0:
-        print("  > VC-1の接続を禁止し、視聴者を退出させます。")
-        try: await vc1.set_permissions(viewer_role, connect=False)
-        except discord.Forbidden: pass
-        # ★追加: 強制退出処理
-        if before.channel == vc1: # 退出したチャンネルがVC1の場合のみ実行
-            for m in before.channel.members:
-                if host_role not in m.roles:
-                    try:
-                        await m.move_to(None, reason="ホストが全員退出しました。")
-                        print(f"    - {m.display_name} をVC-1から退出させました。")
-                    except discord.Forbidden:
-                        print(f"    - エラー: {m.display_name} を退出させられませんでした(権限不足)。")
+            except: pass
 
-    # --- VC-2の管理 ---
-    if hosts_in_vc2_before == 0 and hosts_in_vc2_after > 0:
-        print("  > VC-2の接続を許可します。")
-        try: await vc2.set_permissions(viewer_role, connect=True)
-        except discord.Forbidden: pass
-    elif hosts_in_vc2_before > 0 and hosts_in_vc2_after == 0:
-        print("  > VC-2の接続を禁止し、視聴者を退出させます。")
-        try: await vc2.set_permissions(viewer_role, connect=False)
-        except discord.Forbidden: pass
-        # ★追加: 強制退出処理
-        if before.channel == vc2: # 退出したチャンネルがVC2の場合のみ実行
-            for m in before.channel.members:
-                if host_role not in m.roles:
-                    try:
-                        await m.move_to(None, reason="ホストが全員退出しました。")
-                        print(f"    - {m.display_name} をVC-2から退出させました。")
-                    except discord.Forbidden:
-                        print(f"    - エラー: {m.display_name} を退出させられませんでした(権限不足)。")
+    # ホストが最後の一人として退室した場合
+    elif before.channel == vc1 and after.channel != vc1 and hosts_in_vc1 == 0:
+        print(f"> VC-1 配信終了 ({member.display_name})：接続を禁止し、視聴者を退出させます。")
+        # 視聴者ロールに対して「接続」を禁止する
+        await vc1.set_permissions(viewer_role, connect=False)
+        # VC-1に残っている視聴者を強制退出（キック）させる
+        for m in vc1.members:
+            if host_role not in m.roles:
+                try: await m.move_to(None, reason="配信が終了しました。")
+                except: pass
 
+    # --- VC-2 の管理 ---
+    # ホストが一人目として入室した場合
+    if before.channel != vc2 and after.channel == vc2 and hosts_in_vc2 == 1:
+        print(f"> VC-2 稼働開始 ({member.display_name})：接続を許可します。")
+        await vc2.set_permissions(viewer_role, connect=True)
+
+    # ホストが最後の一人として退室した場合
+    elif before.channel == vc2 and after.channel != vc2 and hosts_in_vc2 == 0:
+        print(f"> VC-2 稼働終了 ({member.display_name})：接続を禁止し、視聴者を退出させます。")
+        await vc2.set_permissions(viewer_role, connect=False)
+        for m in vc2.members:
+            if host_role not in m.roles:
+                try: await m.move_to(None, reason="ホストが退出しました。")
+                except: pass
 # Botを起動
 # 2. 環境変数からトークンを読み込むように変更
 bot.run(os.environ.get('DISCORD_BOT_TOKEN'))
 
 # --- この上までをコピー ---
+
 
 
