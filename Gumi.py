@@ -1,3 +1,4 @@
+print("--- 完全に新しいファイル bot_v2.py で起動中 ---")
 # --- この下からすべてコピー ---
 import discord
 from discord.ext import commands
